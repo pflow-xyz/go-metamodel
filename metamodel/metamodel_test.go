@@ -7,6 +7,9 @@ import (
 	"github.com/pflow-dev/go-metamodel/metamodel"
 )
 
+// sampleUrl is a base64 encoded zip file containing a json file
+const sampleUrl = "https://pflow.dev/p/?z=UEsDBAoAAAAAACSCnFfPFUHSdwIAAHcCAAAKAAAAbW9kZWwuanNvbnsKICJtb2RlbFR5cGUiOiAicGV0cmlOZXQiLAogInZlcnNpb24iOiAidjAiLAogInBsYWNlcyI6IHsKICAiZm9vIjogewogICAib2Zmc2V0IjogMCwKICAgIngiOiAzNjQsCiAgICJ5IjogMzI2LAogICAiaW5pdGlhbCI6IDEKICB9CiB9LAogInRyYW5zaXRpb25zIjogewogICJhZGQiOiB7CiAgICJ4IjogMjQ2LAogICAieSI6IDIwNQogIH0sCiAgInN1YiI6IHsKICAgIngiOiA0NzUsCiAgICJ5IjogMjA2CiAgfSwKICAiYmFyIjogewogICAieCI6IDI0MywKICAgInkiOiA0MzkKICB9LAogICJiYXoiOiB7CiAgICJ4IjogNDc2LAogICAieSI6IDQ0MwogIH0KIH0sCiAiYXJjcyI6IFsKICB7CiAgICJzb3VyY2UiOiAiYWRkIiwKICAgInRhcmdldCI6ICJmb28iLAogICAid2VpZ2h0IjogMQogIH0sCiAgewogICAic291cmNlIjogImZvbyIsCiAgICJ0YXJnZXQiOiAic3ViIiwKICAgIndlaWdodCI6IDEKICB9LAogIHsKICAgInNvdXJjZSI6ICJiYXIiLAogICAidGFyZ2V0IjogImZvbyIsCiAgICJ3ZWlnaHQiOiAzLAogICAiaW5oaWJpdCI6IHRydWUKICB9LAogIHsKICAgInNvdXJjZSI6ICJmb28iLAogICAidGFyZ2V0IjogImJheiIsCiAgICJ3ZWlnaHQiOiAxLAogICAiaW5oaWJpdCI6IHRydWUKICB9CiBdCn1QSwECFAAKAAAAAAAkgpxXzxVB0ncCAAB3AgAACgAAAAAAAAAAAAAAAAAAAAAAbW9kZWwuanNvblBLBQYAAAAAAQABADgAAACfAgAAAAA="
+
 func testModelDeclaration(m metamodel.Declaration) {
 	cell, fn := m.Cell, m.Fn
 
@@ -141,4 +144,26 @@ func TestVectorFromBytes(t *testing.T) {
 			t.Fatalf("mismatch %v <=> %v", v, v2[i])
 		}
 	}
+}
+
+func TestUnzipUrl(t *testing.T) {
+	mm := metamodel.New("test")
+	_, ok := mm.UnzipUrl(sampleUrl)
+	if !ok {
+		t.Fatalf("failed to unzip")
+	}
+	p := mm.Execute()
+	t.Logf("state: %s", mm)
+
+	testCmd{Process: p, action: "bar", expectPass: true}.assertInhibited(t) // FIXME
+	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)
+	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)
+	testCmd{Process: p, action: "bar", expectFail: true}.assertInhibited(t)
+
+	testCmd{Process: p, action: "baz", expectPass: true}.assertInhibited(t)
+	testCmd{call: p.Fire, action: "sub", expectPass: true}.tx(t)
+	testCmd{call: p.Fire, action: "sub", expectPass: true}.tx(t)
+	testCmd{call: p.Fire, action: "sub", expectPass: true}.tx(t)
+	testCmd{Process: p, action: "baz", expectFail: true}.assertInhibited(t)
+
 }

@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-type svgImage struct {
+type SvgImage struct {
 	*svg.SVG
 	stateMachine metamodel.Process
 	width        int
@@ -19,7 +19,7 @@ type svgImage struct {
 	onClose      func()
 }
 
-func NewSvgFile(outputPath string, xy ...int) *svgImage {
+func NewSvgFile(outputPath string, xy ...int) *SvgImage {
 	f, err := os.Create(outputPath)
 	if err != nil {
 		panic(err)
@@ -35,8 +35,8 @@ func NewSvgFile(outputPath string, xy ...int) *svgImage {
 	return i
 }
 
-func NewSvg(out io.Writer, xy ...int) *svgImage {
-	i := new(svgImage)
+func NewSvg(out io.Writer, xy ...int) *SvgImage {
+	i := new(SvgImage)
 	i.writerOut = out
 	return i.newSvgImage(xy...)
 }
@@ -45,7 +45,7 @@ func NewSvg(out io.Writer, xy ...int) *svgImage {
 newSvgImage(w, h, minx, miny, vw, vh)
 passes along parameters as viewbox
 */
-func (i *svgImage) newSvgImage(xy ...int) *svgImage {
+func (i *SvgImage) newSvgImage(xy ...int) *SvgImage {
 	i.SVG = svg.New(i.writerOut)
 	if len(xy) == 2 {
 		i.width = xy[0]
@@ -65,22 +65,23 @@ func (i *svgImage) newSvgImage(xy ...int) *svgImage {
 	return i
 }
 
-func (i *svgImage) markerArrow() {
+func (i *SvgImage) markerArrow() {
 	i.Marker("markerArrow1", 31, 6, 23, 13, `fill="#000000" stroke="#000000" orient="auto"`)
 	i.Rect(3, 5, 28, 3, `fill="#ffffff" stroke="#ffffff"`) // cover end of lines
 	i.Path("M2,2 L2,11 L10,6 L2,2")
 	i.MarkerEnd()
 }
 
-func (i *svgImage) markerInhibit() {
+func (i *SvgImage) markerInhibit() {
 	i.Marker("markerInhibit1", 31, 6, 23, 13, `fill="#000000" stroke="#000000" orient="auto"`)
 	i.Rect(3, 5, 28, 3, `fill="#ffffff" stroke="#ffffff"`) // cover end of lines
 	i.Circle(5, 6, 4)
 	i.MarkerEnd()
 }
 
-func (i *svgImage) Render(net *metamodel.Model, initialVectors ...metamodel.Vector) {
-	i.stateMachine = net.Execute(initialVectors...)
+func (i *SvgImage) Render(m metamodel.MetaModel, initialVectors ...metamodel.Vector) {
+	net := m.Net()
+	i.stateMachine = m.Execute(initialVectors...)
 	for _, a := range net.Arcs {
 		i.arc(a)
 	}
@@ -96,7 +97,7 @@ func (i *svgImage) Render(net *metamodel.Model, initialVectors ...metamodel.Vect
 	}
 }
 
-func (i *svgImage) place(place *metamodel.Place) {
+func (i *SvgImage) place(place *metamodel.Place) {
 	i.Group()
 
 	i.Circle(int(place.X), int(place.Y), 20, `strokeWidth="1.5" fill="#ffffff" stroke="#000000" orient="0" shapeRendering="auto"`)
@@ -117,7 +118,7 @@ func (i *svgImage) place(place *metamodel.Place) {
 	i.Gend()
 }
 
-func (i *svgImage) arc(arc metamodel.Arc) {
+func (i *SvgImage) arc(arc metamodel.Arc) {
 	i.Group()
 
 	var (
@@ -139,7 +140,13 @@ func (i *svgImage) arc(arc metamodel.Arc) {
 			}
 			weight = g.Delta[p.Offset]
 		} else {
-			panic("invalid inhibitor")
+			p := arc.Target.GetPlace()
+			t := arc.Source.GetTransition()
+			g, ok := t.Guards[p.Label]
+			if !ok {
+				panic("missing guard: " + p.Label)
+			}
+			weight = g.Delta[p.Offset]
 		}
 	} else {
 		if arc.Source.IsTransition() {
@@ -194,7 +201,7 @@ func (i *svgImage) arc(arc metamodel.Arc) {
 	i.Gend()
 }
 
-func (i *svgImage) transition(transition *metamodel.Transition) {
+func (i *SvgImage) transition(transition *metamodel.Transition) {
 	i.Group()
 
 	op := metamodel.Op{Action: transition.Label, Multiple: 1, Role: transition.Role.Label}

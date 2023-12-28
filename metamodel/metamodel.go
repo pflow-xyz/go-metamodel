@@ -1,6 +1,15 @@
 package metamodel
 
-import "fmt"
+import (
+	"archive/zip"
+	"bytes"
+	b64 "encoding/base64"
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+var x = json.Unmarshal
 
 // Position defines location of a Place or Transition element
 type Position struct {
@@ -54,8 +63,9 @@ type PlaceMap = map[string]*Place
 
 // Guard attributes inhibit a transition
 type Guard struct {
-	Label string `json:"label"`
-	Delta Vector `json:"delta"`
+	Label    string `json:"label"`
+	Delta    Vector `json:"delta"`
+	Inverted bool   `json:"inverted"`
 }
 
 type GuardMap = map[string]*Guard
@@ -173,11 +183,17 @@ func (n *node) Tx(weight int64, target Node) Node {
 
 // Guard defines an inhibitor rule
 func (n *node) Guard(weight int64, target Node) Node {
+	var inverted = false
 	if n.IsTransition() {
-		panic(BadInhibitorSource)
+		if !target.IsPlace() {
+			panic(BadInhibitorTarget)
+		}
+		inverted = true
 	}
 	if target.IsPlace() {
-		panic(BadInhibitorTarget)
+		if !n.IsTransition() {
+			panic(BadInhibitorTarget)
+		}
 	}
 	if weight < 0 {
 		panic(BadWeight)
@@ -187,6 +203,7 @@ func (n *node) Guard(weight int64, target Node) Node {
 		Target:    target,
 		Weight:    weight,
 		Inhibitor: true,
+		Inverted:  inverted,
 	})
 	return n
 }
@@ -252,6 +269,7 @@ type Arc struct {
 	Target    Node
 	Weight    int64
 	Inhibitor bool
+	Inverted  bool
 }
 
 type PetriNet struct {
@@ -315,6 +333,36 @@ type Event struct {
 	Op
 }
 
+type PlaceDefinition struct {
+	Initial  int64 `json:"initial"`
+	Capacity int64 `json:"capacity"`
+	X        int64 `json:"x"`
+	Y        int64 `json:"y"`
+}
+type TransitionDefinition struct {
+	Role string `json:"role"`
+	X    int64  `json:"x"`
+	Y    int64  `json:"y"`
+}
+type ArcDefinition struct {
+	Source  string `json:"source"`
+	Target  string `json:"target"`
+	Weight  int64  `json:"weight"`
+	Inhibit bool   `json:"inhibit"`
+}
+
+type PlaceMapDefinition map[string]PlaceDefinition
+type TransitionMapDefinition map[string]TransitionDefinition
+type ArcListDefinition []ArcDefinition
+
+type DeclarationObject struct {
+	ModelType   string                  `json:"modelType"`
+	Version     string                  `json:"version"`
+	Places      PlaceMapDefinition      `json:"places"`
+	Transitions TransitionMapDefinition `json:"transitions"`
+	Arcs        ArcListDefinition       `json:"arcs"`
+}
+
 type Process interface {
 	GetState() Vector
 	TokenCount(string) int64
@@ -342,28 +390,179 @@ type MetaModel interface {
 	Execute(...Vector) Process
 	Edit() Editor
 	Node(oid string) Node
+	UnzipUrl(url string) (json string, ok bool)
+	GetSize() (width int, height int)
 }
 
 type Model struct {
 	*PetriNet
 }
 
+func (m *Model) GetSize() (width int, height int) {
+	var limitX int64 = 0
+	var limitY int64 = 0
+
+	for _, p := range m.Places {
+		if limitX < p.X {
+			limitX = p.X
+		}
+		if limitY < p.Y {
+			limitY = p.Y
+		}
+	}
+	for _, t := range m.Transitions {
+		if limitX < t.X {
+			limitX = t.X
+		}
+		if limitY < t.Y {
+			limitY = t.Y
+		}
+	}
+	const margin = 60
+
+	if width == 0 {
+		width = int(limitX) + margin
+	}
+	if height == 0 {
+		height = int(limitY) + margin
+	}
+	return width, height
+}
+
+func (m *Model) loadJsonDefinition(obj string) (ok bool) {
+	ok = false
+	if obj == "" {
+		return false
+	}
+	modelObject := DeclarationObject{}
+	err := json.Unmarshal([]byte(obj), &modelObject)
+	if err != nil {
+		panic(err)
+	}
+	m.Places = PlaceMap{}
+	m.Transitions = TransitionMap{}
+	m.Arcs = []Arc{}
+
+	for label, p := range modelObject.Places {
+		m.Places[label] = &Place{
+			Label:    label,
+			Offset:   int64(len(m.Places)),
+			Position: Position{X: p.X, Y: p.Y},
+			Initial:  p.Initial,
+			Capacity: p.Capacity,
+		}
+	}
+
+	for label, t := range modelObject.Transitions {
+		var role = "default"
+		if t.Role != "" {
+			role = t.Role
+		}
+		m.Transitions[label] = &Transition{
+			Label:    label,
+			Position: Position{X: t.X, Y: t.Y},
+			Role:     Role{Label: role},
+			Delta:    m.EmptyVector(),
+			Guards:   GuardMap{},
+		}
+	}
+
+	for _, a := range modelObject.Arcs {
+		source := m.Node(a.Source)
+		target := m.Node(a.Target)
+		if a.Inhibit {
+			if source.IsPlace() {
+				if !target.IsTransition() {
+					panic(BadInhibitorTarget)
+				}
+				source.Guard(a.Weight, target)
+			}
+			if source.IsTransition() {
+				if !target.IsPlace() {
+					panic(BadInhibitorTarget)
+				}
+				source.Guard(a.Weight, target)
+			}
+		} else {
+			source.Tx(a.Weight, target)
+		}
+	}
+
+	m.Index()
+
+	return true
+}
+
+func (m *Model) UnzipUrl(url string) (obj string, ok bool) {
+	queryString := ""
+	ok = false
+	if i := strings.Index(url, "?"); i > -1 {
+		queryString = url[i+1:]
+		url = url[:i]
+	}
+	z := ""
+	for _, param := range strings.Split(queryString, "&") {
+		if strings.HasPrefix(param, "z=") {
+			z = param[2:]
+		}
+	}
+	// base64 decode z=
+	if z != "" {
+		decoded := make([]byte, len(z))
+		_, err := b64.StdEncoding.Decode(decoded, []byte(z))
+		if err != nil {
+			panic(err)
+		}
+		// open zip archive
+		zipReader, zipErr := zip.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
+		if zipErr != nil {
+			panic(zipErr)
+		}
+		for _, file := range zipReader.File {
+			if file.Name != "model.json" {
+				continue
+			}
+			fileReader, err := file.Open()
+			if err != nil {
+				panic(err)
+			}
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(fileReader)
+			obj = buf.String()
+		}
+	}
+	ok = m.loadJsonDefinition(obj)
+	return obj, ok
+}
+
 func (m *Model) Guard(source Node, target Node, weight int64) {
-	if source.IsTransition() {
-		panic(BadInhibitorSource)
-	}
-	if target.IsPlace() {
-		panic(BadInhibitorTarget)
-	}
 	if weight < 0 {
 		panic(BadWeight)
 	}
-	m.Arcs = append(m.Arcs, Arc{
-		Source:    source,
-		Target:    target,
-		Weight:    weight,
-		Inhibitor: true,
-	})
+	if source.IsTransition() {
+		if !target.IsPlace() {
+			panic(BadInhibitorSource)
+		}
+		m.Arcs = append(m.Arcs, Arc{
+			Source:    source,
+			Target:    target,
+			Weight:    weight,
+			Inhibitor: true,
+			Inverted:  true,
+		})
+	}
+	if source.IsPlace() {
+		if !target.IsTransition() {
+			panic(BadInhibitorTarget)
+		}
+		m.Arcs = append(m.Arcs, Arc{
+			Source:    source,
+			Target:    target,
+			Weight:    weight,
+			Inhibitor: true,
+			Inverted:  false,
+		})
+	}
 }
 
 func (m *Model) Node(oid string) Node {
@@ -449,18 +648,23 @@ func (m *Model) Index() Editor {
 	}
 	for _, arc := range m.Arcs {
 		if arc.Inhibitor {
-			if !arc.Source.IsPlace() {
-				panic(BadInhibitorSource)
+			if arc.Inverted {
+				g := &Guard{
+					Label:    arc.Target.GetPlace().Label,
+					Delta:    m.EmptyVector(),
+					Inverted: true,
+				}
+				g.Delta[arc.Target.GetPlace().Offset] = 0 - arc.Weight
+				arc.Source.GetTransition().Guards[g.Label] = g
+			} else {
+				g := &Guard{
+					Label:    arc.Source.GetPlace().Label,
+					Delta:    m.EmptyVector(),
+					Inverted: false,
+				}
+				g.Delta[arc.Source.GetPlace().Offset] = 0 - arc.Weight
+				arc.Target.GetTransition().Guards[g.Label] = g
 			}
-			if !arc.Target.IsTransition() {
-				panic(BadInhibitorTarget)
-			}
-			g := &Guard{
-				Label: arc.Source.GetPlace().Label,
-				Delta: m.EmptyVector(),
-			}
-			g.Delta[arc.Source.GetPlace().Offset] = 0 - arc.Weight
-			arc.Target.GetTransition().Guards[g.Label] = g
 		} else {
 			if arc.Source.IsPlace() {
 				arc.Target.GetTransition().Delta[arc.Source.GetPlace().Offset] = 0 - arc.Weight
@@ -551,11 +755,12 @@ var defaultRole = Role{Label: "default"}
 // Fn declares a new transition element
 func (m *Model) Fn(def ...func(t *Transition)) Node {
 	t := &Transition{
-		Label:    m.TransitionSeq(),
-		Position: Position{},
-		Role:     defaultRole,
-		Delta:    Vector{},
-		Guards:   GuardMap{},
+		Label:        m.TransitionSeq(),
+		Position:     Position{},
+		Role:         defaultRole,
+		Delta:        Vector{},
+		Guards:       GuardMap{},
+		AllowReentry: false,
 	}
 	for _, defn := range def {
 		defn(t)
@@ -654,21 +859,24 @@ func (sm *StateMachine) Fire(op Op) (ok bool, msg string, out Vector) {
 	return ok, msg, out
 }
 
-func (sm *StateMachine) Inhibited(op Op) (bool, string) {
+func (sm *StateMachine) Inhibited(op Op) (inhibited bool, msg string) {
 	tx := sm.m.Transitions[op.Action]
 	if tx == nil {
 		panic(UnknownAction)
 	}
-TESTING:
-	for label, g := range tx.Guards {
-		for offset, delta := range g.Delta {
-			if sm.state[offset]+delta < 0 {
-				continue TESTING
+	for _, g := range tx.Guards {
+		flag, _, _ := Add(sm.state, g.Delta, 1, sm.m.EmptyVector())
+		if g.Inverted {
+			if !flag {
+				return true, g.Label
+			}
+		} else {
+			if flag {
+				return true, g.Label
 			}
 		}
-		return true, label
 	}
-	return false, OK
+	return false, msg
 }
 
 func (sm *StateMachine) GetState() Vector {
