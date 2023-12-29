@@ -146,6 +146,26 @@ func TestVectorFromBytes(t *testing.T) {
 	}
 }
 
+func TestZipAndUnzipUrl(t *testing.T) {
+	mm := metamodel.New("test")
+	_, ok := mm.UnzipUrl(sampleUrl)
+	if !ok {
+		t.Fatalf("failed to unzip")
+	}
+	t.Logf("state: %s", mm)
+
+	urlOut, zipOk := mm.ZipUrl("http://localhost:3000/")
+	if !zipOk {
+		t.Fatalf("failed to zip")
+	}
+
+	m := metamodel.New("test2")
+	_, unzipOk := m.UnzipUrl(urlOut)
+	if !unzipOk {
+		t.Fatalf("failed to unzip")
+	}
+	t.Logf("generated url: %s", urlOut)
+}
 func TestUnzipUrl(t *testing.T) {
 	mm := metamodel.New("test")
 	_, ok := mm.UnzipUrl(sampleUrl)
@@ -153,8 +173,6 @@ func TestUnzipUrl(t *testing.T) {
 		t.Fatalf("failed to unzip")
 	}
 	p := mm.Execute()
-	t.Logf("state: %s", mm)
-
 	testCmd{Process: p, action: "bar", expectPass: true}.assertInhibited(t) // FIXME
 	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)
 	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)

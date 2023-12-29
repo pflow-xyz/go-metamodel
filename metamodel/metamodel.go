@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-var x = json.Unmarshal
-
 // Position defines location of a Place or Transition element
 type Position struct {
 	X int64 `json:"x"`
@@ -391,6 +389,7 @@ type MetaModel interface {
 	Edit() Editor
 	Node(oid string) Node
 	UnzipUrl(url string) (json string, ok bool)
+	ZipUrl(...string) (url string, ok bool)
 	GetSize() (width int, height int)
 }
 
@@ -427,6 +426,55 @@ func (m *Model) GetSize() (width int, height int) {
 		height = int(limitY) + margin
 	}
 	return width, height
+}
+
+func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
+	modelObject := DeclarationObject{
+		ModelType:   "petriNet",
+		Version:     "v0",
+		Places:      PlaceMapDefinition{},
+		Transitions: TransitionMapDefinition{},
+		Arcs:        ArcListDefinition{},
+	}
+	for label, p := range m.Places {
+		modelObject.Places[label] = PlaceDefinition{
+			Initial:  p.Initial,
+			Capacity: p.Capacity,
+			X:        p.X,
+			Y:        p.Y,
+		}
+	}
+	for label, t := range m.Transitions {
+		modelObject.Transitions[label] = TransitionDefinition{
+			Role: t.Role.Label,
+			X:    t.X,
+			Y:    t.Y,
+		}
+	}
+	for _, a := range m.Arcs {
+		if a.Source.IsTransition() {
+			modelObject.Arcs = append(modelObject.Arcs, ArcDefinition{
+				Source:  a.Source.GetTransition().Label,
+				Target:  a.Target.GetPlace().Label,
+				Weight:  a.Weight,
+				Inhibit: a.Inhibitor,
+			})
+		} else {
+			modelObject.Arcs = append(modelObject.Arcs, ArcDefinition{
+				Source:  a.Source.GetPlace().Label,
+				Target:  a.Target.GetTransition().Label,
+				Weight:  a.Weight,
+				Inhibit: a.Inhibitor,
+			})
+
+		}
+	}
+
+	obj, err := json.Marshal(modelObject)
+	if err != nil {
+		panic(err)
+	}
+	return obj, true
 }
 
 func (m *Model) loadJsonDefinition(obj string) (ok bool) {
@@ -491,6 +539,34 @@ func (m *Model) loadJsonDefinition(obj string) (ok bool) {
 	m.Index()
 
 	return true
+}
+
+func (m *Model) ZipUrl(path ...string) (url string, ok bool) {
+	jsonObj, ok := m.exportObjectJsonDefinition()
+	if ok {
+		var buf bytes.Buffer
+		zipWriter := zip.NewWriter(&buf)
+		zipFile, err := zipWriter.Create("model.json")
+		if err != nil {
+			panic(err)
+		}
+		_, err = zipFile.Write(jsonObj)
+		if err != nil {
+			panic(err)
+		}
+		err = zipWriter.Close()
+		if err != nil {
+			panic(err)
+		}
+		var encoder = b64.StdEncoding.Strict()
+		data := encoder.EncodeToString(buf.Bytes())
+		if len(path) > 0 {
+			url = path[0] + "?z=" + data
+			return url, true
+		}
+		return "?z=" + data, true
+	}
+	return "", false
 }
 
 func (m *Model) UnzipUrl(url string) (obj string, ok bool) {
