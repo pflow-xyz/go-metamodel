@@ -13,14 +13,10 @@ func TestNewSvg(t *testing.T) {
 	// Load a model from a URL
 	mm := metamodel.New("test")
 	mm.UnzipUrl(sampleUrl)
-	w, h := mm.GetSize()
-	x := 110
-	y := 80
-	marginX := 40
-	marginY := 40
-	width := w - marginX
-	height := h - marginY
-	i := image.NewSvgFile("/tmp/test.svg", width, height, x, y, width, height)
-	i.Rect(x, y, width, height, "fill: #fff; stroke: #000; stroke-width: 1px;")
+	x1, y1, x2, y2 := mm.GetViewPort()
+	width := x2 - x1
+	height := y2 - y1
+	i := image.NewSvgFile("/tmp/test.svg", width, height, x1, y1, x2, y2)
+	i.Rect(x1, y1, width, height, "fill: #fff; stroke: #000; stroke-width: 1px;")
 	i.Render(mm)
 }

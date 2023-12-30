@@ -390,14 +390,16 @@ type MetaModel interface {
 	Node(oid string) Node
 	UnzipUrl(url string) (json string, ok bool)
 	ZipUrl(...string) (url string, ok bool)
-	GetSize() (width int, height int)
+	GetViewPort() (int, int, int, int)
 }
 
 type Model struct {
 	*PetriNet
 }
 
-func (m *Model) GetSize() (width int, height int) {
+func (m *Model) GetViewPort() (x1 int, x2 int, y1 int, y2 int) {
+	var minX int64 = 0
+	var minY int64 = 0
 	var limitX int64 = 0
 	var limitY int64 = 0
 
@@ -408,6 +410,12 @@ func (m *Model) GetSize() (width int, height int) {
 		if limitY < p.Y {
 			limitY = p.Y
 		}
+		if minX == 0 || minX > p.X {
+			minX = p.X
+		}
+		if minY == 0 || minY > p.Y {
+			minY = p.Y
+		}
 	}
 	for _, t := range m.Transitions {
 		if limitX < t.X {
@@ -416,16 +424,15 @@ func (m *Model) GetSize() (width int, height int) {
 		if limitY < t.Y {
 			limitY = t.Y
 		}
+		if minX == 0 || minX > t.X {
+			minX = t.X
+		}
+		if minY == 0 || minY > t.Y {
+			minY = t.Y
+		}
 	}
 	const margin = 60
-
-	if width == 0 {
-		width = int(limitX) + margin
-	}
-	if height == 0 {
-		height = int(limitY) + margin
-	}
-	return width, height
+	return int(minX) - margin, int(minY) - margin, int(limitX) + margin, int(limitY) + margin
 }
 
 func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
