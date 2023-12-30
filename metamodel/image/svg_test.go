@@ -16,7 +16,7 @@ func TestNewSvg(t *testing.T) {
 	x1, y1, x2, y2 := mm.GetViewPort()
 	width := x2 - x1
 	height := y2 - y1
-	i := image.NewSvgFile("/tmp/test.svg", width, height, x1, y1, x2, y2)
+	i := image.NewSvgFile("/tmp/test.svg", width, height, x1, y1, width, height)
 	i.Rect(x1, y1, width, height, "fill: #fff; stroke: #000; stroke-width: 1px;")
 	i.Render(mm)
 }
