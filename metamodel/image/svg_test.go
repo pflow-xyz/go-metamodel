@@ -14,6 +14,13 @@ func TestNewSvg(t *testing.T) {
 	mm := metamodel.New("test")
 	mm.UnzipUrl(sampleUrl)
 	w, h := mm.GetSize()
-	image.NewSvgFile("/tmp/test.svg", w, h).
-		Render(mm)
+	x := 110
+	y := 80
+	marginX := 40
+	marginY := 40
+	width := w - marginX
+	height := h - marginY
+	i := image.NewSvgFile("/tmp/test.svg", width, height, x, y, width, height)
+	i.Rect(x, y, width, height, "fill: #fff; stroke: #000; stroke-width: 1px;")
+	i.Render(mm)
 }

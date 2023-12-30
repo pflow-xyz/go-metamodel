@@ -100,8 +100,8 @@ func (i *SvgImage) Render(m metamodel.MetaModel, initialVectors ...metamodel.Vec
 func (i *SvgImage) place(place *metamodel.Place) {
 	i.Group()
 
-	i.Circle(int(place.X), int(place.Y), 20, `strokeWidth="1.5" fill="#ffffff" stroke="#000000" orient="0" shapeRendering="auto"`)
-	i.Text(int(place.X)-20, int(place.Y)-25, place.Label, `font-size="small"`)
+	i.Circle(int(place.X), int(place.Y), 16, `strokeWidth="1.5" fill="#ffffff" stroke="#000000" orient="0" shapeRendering="auto"`)
+	i.Text(int(place.X)-18, int(place.Y)-20, place.Label, `font-size="small"`)
 	x := int(place.X)
 	y := int(place.Y)
 
@@ -220,7 +220,7 @@ func (i *SvgImage) transition(transition *metamodel.Transition) {
 
 	x := int(transition.X - 17)
 	y := int(transition.Y - 17)
-	i.Rect(x, y, 34, 34, `stroke="#000000" fill="`+fill+`"`)
+	i.Rect(x, y, 30, 30, `stroke="#000000" fill="`+fill+`" rx="4"`)
 	i.Text(x, y-8, transition.Label, `font-size="small"`)
 	i.Gend()
 }
