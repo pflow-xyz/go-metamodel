@@ -332,6 +332,7 @@ type Event struct {
 }
 
 type PlaceDefinition struct {
+	Offset   int64 `json:"offset"`
 	Initial  int64 `json:"initial"`
 	Capacity int64 `json:"capacity"`
 	X        int64 `json:"x"`
@@ -499,13 +500,14 @@ func (m *Model) loadJsonDefinition(obj string) (ok bool) {
 	m.Arcs = []Arc{}
 
 	for label, p := range modelObject.Places {
-		m.Places[label] = &Place{
+		place := &Place{
 			Label:    label,
-			Offset:   int64(len(m.Places)),
+			Offset:   p.Offset,
 			Position: Position{X: p.X, Y: p.Y},
 			Initial:  p.Initial,
 			Capacity: p.Capacity,
 		}
+		m.Places[label] = place
 	}
 
 	for label, t := range modelObject.Transitions {
