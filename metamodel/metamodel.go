@@ -389,7 +389,7 @@ type MetaModel interface {
 	Execute(...Vector) Process
 	Edit() Editor
 	Node(oid string) Node
-	UnzipUrl(url string) (json string, ok bool)
+	UnzipUrl(url string, filename string) (obj string, ok bool)
 	ZipUrl(...string) (url string, ok bool)
 	GetViewPort() (int, int, int, int)
 }
@@ -583,7 +583,7 @@ func (m *Model) ZipUrl(path ...string) (url string, ok bool) {
 	return "", false
 }
 
-func (m *Model) UnzipUrl(url string) (obj string, ok bool) {
+func (m *Model) UnzipUrl(url string, filename string) (obj string, ok bool) {
 	queryString := ""
 	ok = false
 	if i := strings.Index(url, "?"); i > -1 {
@@ -609,8 +609,10 @@ func (m *Model) UnzipUrl(url string) (obj string, ok bool) {
 			panic(zipErr)
 		}
 		for _, file := range zipReader.File {
-			if file.Name != "model.json" {
+			if file.Name != filename {
 				continue
+			} else {
+				ok = true
 			}
 			fileReader, err := file.Open()
 			if err != nil {
@@ -621,7 +623,10 @@ func (m *Model) UnzipUrl(url string) (obj string, ok bool) {
 			obj = buf.String()
 		}
 	}
-	ok = m.loadJsonDefinition(obj)
+
+	if filename == "model.json" {
+		ok = m.loadJsonDefinition(obj)
+	}
 	return obj, ok
 }
 
