@@ -398,7 +398,7 @@ type Model struct {
 	*PetriNet
 }
 
-func (m *Model) GetViewPort() (x1 int, x2 int, y1 int, y2 int) {
+func (m *Model) GetViewPort() (x1 int, y1 int, width int, height int) {
 	var minX int64 = 0
 	var minY int64 = 0
 	var limitX int64 = 0
@@ -433,7 +433,12 @@ func (m *Model) GetViewPort() (x1 int, x2 int, y1 int, y2 int) {
 		}
 	}
 	const margin = 60
-	return int(minX) - margin, int(minY) - margin, int(limitX) + margin, int(limitY) + margin
+	x1 = int(minX) - margin
+	y1 = int(minY) - margin
+	x2 := int(limitX) + margin
+	y2 := int(limitY) + margin
+
+	return x1, y1, x2 - x1, y2 - y1
 }
 
 func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
