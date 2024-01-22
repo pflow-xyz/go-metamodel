@@ -71,7 +71,6 @@ type GuardMap = map[string]*Guard
 type SubnetNode struct {
 	*PetriNet  `json:"-"`
 	SubnetType string `json:"subnetType"`
-	Schema     string `json:"schema"`
 }
 
 // Transition defines a token transfer action
@@ -87,7 +86,7 @@ type Transition struct {
 
 type TransitionMap = map[string]*Transition
 
-// Node is an interstitial interface used when composing m elements
+// Node is an interstitial interface used when composing model elements
 type Node interface {
 	Tx(weight int64, target Node) Node
 	Guard(weight int64, target Node) Node
@@ -271,7 +270,7 @@ type Arc struct {
 }
 
 type PetriNet struct {
-	Schema      string        `json:"schema"`
+	ModelType   string        `json:"modelType"`
 	Places      PlaceMap      `json:"places"`
 	Transitions TransitionMap `json:"transitions"`
 	Arcs        []Arc         `json:"-"`
@@ -370,7 +369,6 @@ type Process interface {
 	Fire(Op) (ok bool, msg string, out Vector)
 }
 
-// REVIEW: should we expose Role here also?
 type Declaration interface {
 	Cell(...func(p *Place)) Node
 	Fn(...func(t *Transition)) Node
@@ -392,6 +390,8 @@ type MetaModel interface {
 	UnzipUrl(url string, filename string) (obj string, ok bool)
 	ZipUrl(...string) (url string, ok bool)
 	GetViewPort() (int, int, int, int)
+	ToDeclaration() (obj []byte, ok bool)
+	ToDeclarationObject() DeclarationObject
 }
 
 type Model struct {
@@ -440,10 +440,15 @@ func (m *Model) GetViewPort() (x1 int, y1 int, width int, height int) {
 
 	return x1, y1, x2 - x1, y2 - y1
 }
+func (m *Model) ToDeclaration() ([]byte, bool) {
+	modelObj := m.ToDeclarationObject()
+	data, err := json.Marshal(modelObj) // TODO write a custom encoder to match front end style
+	return data, err == nil
+}
 
-func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
+func (m *Model) ToDeclarationObject() DeclarationObject {
 	modelObject := DeclarationObject{
-		ModelType:   "petriNet",
+		ModelType:   m.ModelType,
 		Version:     "v0",
 		Places:      PlaceMapDefinition{},
 		Transitions: TransitionMapDefinition{},
@@ -451,6 +456,7 @@ func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
 	}
 	for label, p := range m.Places {
 		modelObject.Places[label] = PlaceDefinition{
+			Offset:   p.Offset,
 			Initial:  p.Initial,
 			Capacity: p.Capacity,
 			X:        p.X,
@@ -465,6 +471,9 @@ func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
 		}
 	}
 	for _, a := range m.Arcs {
+		if a.Weight == 0 {
+			a.Weight = 1
+		}
 		if a.Source.IsTransition() {
 			modelObject.Arcs = append(modelObject.Arcs, ArcDefinition{
 				Source:  a.Source.GetTransition().Label,
@@ -482,12 +491,7 @@ func (m *Model) exportObjectJsonDefinition() (obj []byte, ok bool) {
 
 		}
 	}
-
-	obj, err := json.Marshal(modelObject)
-	if err != nil {
-		panic(err)
-	}
-	return obj, true
+	return modelObject
 }
 
 func (m *Model) loadJsonDefinition(obj string) (ok bool) {
@@ -500,6 +504,7 @@ func (m *Model) loadJsonDefinition(obj string) (ok bool) {
 	if err != nil {
 		panic(err)
 	}
+	m.ModelType = modelObject.ModelType
 	m.Places = PlaceMap{}
 	m.Transitions = TransitionMap{}
 	m.Arcs = []Arc{}
@@ -532,6 +537,9 @@ func (m *Model) loadJsonDefinition(obj string) (ok bool) {
 	for _, a := range modelObject.Arcs {
 		source := m.Node(a.Source)
 		target := m.Node(a.Target)
+		if a.Weight == 0 {
+			a.Weight = 1
+		}
 		if a.Inhibit {
 			if source.IsPlace() {
 				if !target.IsTransition() {
@@ -556,34 +564,34 @@ func (m *Model) loadJsonDefinition(obj string) (ok bool) {
 }
 
 func (m *Model) ZipUrl(path ...string) (url string, ok bool) {
-	jsonObj, ok := m.exportObjectJsonDefinition()
-	if ok {
-		var buf bytes.Buffer
-		zipWriter := zip.NewWriter(&buf)
-		zipFile, err := zipWriter.Create("model.json")
-		if err != nil {
-			panic(err)
-		}
-		_, err = zipFile.Write(jsonObj)
-		if err != nil {
-			panic(err)
-		}
-		err = zipWriter.Close()
-		if err != nil {
-			panic(err)
-		}
-		var encoder = b64.StdEncoding.Strict()
-		data := encoder.EncodeToString(buf.Bytes())
-		if len(path) > 0 {
-			url = path[0] + "?z=" + data
-			return url, true
-		}
-		return "?z=" + data, true
+	jsonObj, ok := m.ToDeclaration()
+	if !ok {
+		return "", false
 	}
-	return "", false
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+	zipFile, err := zipWriter.Create("model.json")
+	if err != nil {
+		panic(err)
+	}
+	_, err = zipFile.Write(jsonObj)
+	if err != nil {
+		panic(err)
+	}
+	err = zipWriter.Close()
+	if err != nil {
+		panic(err)
+	}
+	var encoder = b64.StdEncoding.Strict()
+	data := encoder.EncodeToString(buf.Bytes())
+	if len(path) > 0 {
+		url = path[0] + "?z=" + data
+		return url, true
+	}
+	return "?z=" + data, true
 }
 
-func (m *Model) UnzipUrl(url string, filename string) (obj string, ok bool) {
+func (m *Model) UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
 	queryString := ""
 	ok = false
 	if i := strings.Index(url, "?"); i > -1 {
@@ -609,25 +617,22 @@ func (m *Model) UnzipUrl(url string, filename string) (obj string, ok bool) {
 			panic(zipErr)
 		}
 		for _, file := range zipReader.File {
-			if file.Name != filename {
-				continue
-			} else {
-				ok = true
+			if file.Name == filename {
+				fileReader, err := file.Open()
+				if err != nil {
+					panic(err)
+				}
+				buf := new(bytes.Buffer)
+				_, err = buf.ReadFrom(fileReader)
+				if err != nil {
+					panic(err)
+				}
+				ok = m.loadJsonDefinition(buf.String())
+				return sourceJson, ok
 			}
-			fileReader, err := file.Open()
-			if err != nil {
-				panic(err)
-			}
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(fileReader)
-			obj = buf.String()
 		}
 	}
-
-	if filename == "model.json" {
-		ok = m.loadJsonDefinition(obj)
-	}
-	return obj, ok
+	return sourceJson, false
 }
 
 func (m *Model) Guard(source Node, target Node, weight int64) {
@@ -775,10 +780,14 @@ func (m *Model) Net() *PetriNet {
 	return m.PetriNet
 }
 
-func New(schema string) MetaModel {
+func New(netType ...string) MetaModel {
+	modelType := "petriNet"
+	if len(netType) == 1 {
+		modelType = netType[0]
+	}
 	return &Model{
 		PetriNet: &PetriNet{
-			Schema:      schema,
+			ModelType:   modelType,
 			Places:      PlaceMap{},
 			Transitions: TransitionMap{},
 			Arcs:        []Arc{},
@@ -788,8 +797,8 @@ func New(schema string) MetaModel {
 }
 
 func (m *Model) Define(def ...func(declaration Declaration)) MetaModel {
-	for _, defn := range def {
-		defn(m)
+	for _, definition := range def {
+		definition(m)
 	}
 	m.Index()
 	return m
@@ -835,8 +844,8 @@ func (m *Model) Cell(def ...func(p *Place)) Node {
 		Initial:  0,
 		Capacity: 0,
 	}
-	for _, defn := range def {
-		defn(p)
+	for _, definition := range def {
+		definition(p)
 	}
 	m.Places[p.Label] = p
 	return &node{
@@ -857,8 +866,8 @@ func (m *Model) Fn(def ...func(t *Transition)) Node {
 		Guards:       GuardMap{},
 		AllowReentry: false,
 	}
-	for _, defn := range def {
-		defn(t)
+	for _, definition := range def {
+		definition(t)
 	}
 	m.Roles[t.Role.Label] = t.Role
 	m.Transitions[t.Label] = t
@@ -945,6 +954,7 @@ func (sm *StateMachine) TestFire(op Op) (flag bool, msg string, out Vector) {
 }
 
 func (sm *StateMachine) Fire(op Op) (ok bool, msg string, out Vector) {
+	// TODO: refactor to support wf-nets and elementary modelTypes
 	ok, msg, out = sm.TestFire(op)
 	if ok {
 		for i, v := range out {

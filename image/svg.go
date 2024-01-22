@@ -3,7 +3,6 @@ package image
 import (
 	"bufio"
 	"fmt"
-	"github.com/ajstarks/svgo"
 	"github.com/pflow-dev/go-metamodel/metamodel"
 	"io"
 	"math"
@@ -11,7 +10,6 @@ import (
 )
 
 type SvgImage struct {
-	*svg.SVG
 	stateMachine metamodel.Process
 	width        int
 	height       int
@@ -41,12 +39,7 @@ func NewSvg(out io.Writer, xy ...int) *SvgImage {
 	return i.newSvgImage(xy...)
 }
 
-/*
-newSvgImage(w, h, minx, miny, vw, vh)
-passes along parameters as viewbox
-*/
 func (i *SvgImage) newSvgImage(xy ...int) *SvgImage {
-	i.SVG = svg.New(i.writerOut)
 	if len(xy) == 2 {
 		i.width = xy[0]
 		i.height = xy[1]
@@ -56,29 +49,53 @@ func (i *SvgImage) newSvgImage(xy ...int) *SvgImage {
 	}
 
 	if len(xy) == 6 {
-		i.Startview(xy[0], xy[1], xy[2], xy[3], xy[4], xy[5])
+		i.writerOut.Write([]byte(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%v\" height=\"%v\" viewBox=\"%v %v %v %v\">\n", i.width, i.height, xy[2], xy[3], xy[4], xy[5])))
 	} else {
-		i.Startview(i.width, i.height, 0, 0, i.width, i.height)
+		i.writerOut.Write([]byte(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%v\" height=\"%v\" >\n", i.width, i.height)))
 	}
-	i.markerInhibit()
-	i.markerArrow()
+	i.writerOut.Write([]byte(
+		`<defs><marker id="markerArrow1" markerWidth="23" markerHeight="13" refX="31" refY="6" orient="auto">` +
+			`<rect width="28" height="3" fill="white" stroke="white" x="3" y="5"/><path d="M2,2 L2,11 L10,6 L2,2"/></marker>` +
+			`<marker id="markerInhibit1" markerWidth="23" markerHeight="13" refX="31" refY="6" orient="auto">` +
+			`<rect width="28" height="3" fill="white" stroke="white" x="3" y="5"/><circle cx="5" cy="6.5" r="4"/></marker></defs>` +
+			"\n"))
 	return i
 }
 
-func (i *SvgImage) markerArrow() {
-	i.Marker("markerArrow1", 31, 6, 23, 13, `fill="#000000" stroke="#000000" orient="auto"`)
-	i.Rect(3, 5, 28, 3, `fill="#ffffff" stroke="#ffffff"`) // cover end of lines
-	i.Path("M2,2 L2,11 L10,6 L2,2")
-	i.MarkerEnd()
+func (i *SvgImage) End() {
+	i.writerOut.Write([]byte("</svg>"))
 }
 
-func (i *SvgImage) markerInhibit() {
-	i.Marker("markerInhibit1", 31, 6, 23, 13, `fill="#000000" stroke="#000000" orient="auto"`)
-	i.Rect(3, 5, 28, 3, `fill="#ffffff" stroke="#ffffff"`) // cover end of lines
-	i.Circle(5, 6, 4)
-	i.MarkerEnd()
+func (i *SvgImage) Rect(x int, y int, width int, height int, extra string) {
+	i.writerOut.Write([]byte(fmt.Sprintf(`<rect x="%v" y="%v" width="%v" height="%v" %s />`, x, y, width, height, extra)))
 }
 
+func (i *SvgImage) Circle(x int, y int, radius int, extra string) {
+	i.writerOut.Write([]byte(fmt.Sprintf(`<circle cx="%v" cy="%v" r="%v" %s />`, x, y, radius, extra)))
+}
+
+func (i *SvgImage) Text(x int, y int, text string, extra string) {
+	i.writerOut.Write([]byte(fmt.Sprintf(`<text x="%v" y="%v" %s>%s</text>`, x, y, extra, text)))
+}
+
+func (i *SvgImage) Path(path string) {
+	i.writerOut.Write([]byte(fmt.Sprintf(`<path d="%s" />`, path)))
+}
+
+func (i *SvgImage) Line(x1 int, y1 int, x2 int, y2 int, extra string) {
+	i.writerOut.Write([]byte(fmt.Sprintf("<line x1=\"%v\" y1=\"%v\" x2=\"%v\" y2=\"%v\" %s />\n", x1, y1, x2, y2, extra)))
+}
+
+func (i *SvgImage) Group() {
+	i.writerOut.Write([]byte("<g>\n"))
+}
+func (i *SvgImage) Gend() {
+	i.writerOut.Write([]byte("\n</g>\n"))
+}
+
+func (i *SvgImage) MarkerEnd() {
+	i.writerOut.Write([]byte("</marker>\n"))
+}
 func (i *SvgImage) Render(m metamodel.MetaModel, initialVectors ...metamodel.Vector) {
 	net := m.Net()
 	i.stateMachine = m.Execute(initialVectors...)
@@ -99,7 +116,6 @@ func (i *SvgImage) Render(m metamodel.MetaModel, initialVectors ...metamodel.Vec
 
 func (i *SvgImage) place(place *metamodel.Place) {
 	i.Group()
-
 	i.Circle(int(place.X), int(place.Y), 16, `strokeWidth="1.5" fill="#ffffff" stroke="#000000" orient="0" shapeRendering="auto"`)
 	i.Text(int(place.X)-18, int(place.Y)-20, place.Label, `font-size="small"`)
 	x := int(place.X)
@@ -179,8 +195,8 @@ func (i *SvgImage) arc(arc metamodel.Arc) {
 		panic("invalid arc declaration")
 	}
 
-	var midX int64 = (x2 + x1) / 2
-	var midY int64 = (y2+y1)/2 - 8
+	var midX = (x2 + x1) / 2
+	var midY = (y2+y1)/2 - 8
 	var offsetX int64 = 4
 	var offsetY int64 = 4
 

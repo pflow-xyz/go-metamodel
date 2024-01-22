@@ -38,7 +38,7 @@ func testModelDeclaration(m metamodel.Declaration) {
 }
 
 func TestModel_Define(t *testing.T) {
-	var mm = metamodel.New("test").Define(testModelDeclaration)
+	var mm = metamodel.New().Define(testModelDeclaration)
 
 	if !mm.Node("foo").IsPlace() {
 		t.Fatal("failed to retrieve element")
@@ -59,7 +59,7 @@ func TestModel_Define(t *testing.T) {
 }
 
 func TestModel_GetState(t *testing.T) {
-	var mm = metamodel.New("test").Define(testModelDeclaration)
+	var mm = metamodel.New().Define(testModelDeclaration)
 	p := mm.Execute()
 	s := p.GetState()
 	s[0] = 7 // try to alter state
@@ -106,7 +106,7 @@ func (c testCmd) assertInhibited(t *testing.T) {
 func TestModel_Execute(t *testing.T) {
 
 	testEditAndExecute := func(rebuild bool) {
-		var mm = metamodel.New("test").Define(testModelDeclaration)
+		var mm = metamodel.New().Define(testModelDeclaration)
 		if rebuild {
 			mm.Edit().Graph().Index()
 		}
@@ -142,8 +142,8 @@ func TestVectorFromBytes(t *testing.T) {
 }
 
 func TestZipAndUnzipUrl(t *testing.T) {
-	mm := metamodel.New("test")
-	_, ok := mm.UnzipUrl(sampleUrl)
+	mm := metamodel.New()
+	_, ok := mm.UnzipUrl(sampleUrl, "model.json")
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
@@ -153,16 +153,16 @@ func TestZipAndUnzipUrl(t *testing.T) {
 		t.Fatalf("failed to zip")
 	}
 
-	m := metamodel.New("test2")
-	_, unzipOk := m.UnzipUrl(urlOut)
+	m := metamodel.New()
+	_, unzipOk := m.UnzipUrl(urlOut, "model.json")
 	if !unzipOk {
 		t.Fatalf("failed to unzip")
 	}
 	t.Logf("generated url: %s", urlOut)
 }
 func TestUnzipUrl(t *testing.T) {
-	mm := metamodel.New("test")
-	_, ok := mm.UnzipUrl(sampleUrl)
+	mm := metamodel.New()
+	_, ok := mm.UnzipUrl(sampleUrl, "model.json")
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
