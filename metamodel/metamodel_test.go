@@ -2,9 +2,8 @@ package metamodel_test
 
 import (
 	"encoding/json"
-	"testing"
-
 	"github.com/pflow-dev/go-metamodel/v2/metamodel"
+	"testing"
 )
 
 // sampleUrl is a base64 encoded zip file containing a json file
