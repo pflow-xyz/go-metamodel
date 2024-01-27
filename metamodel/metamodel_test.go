@@ -143,7 +143,7 @@ func TestVectorFromBytes(t *testing.T) {
 
 func TestZipAndUnzipUrl(t *testing.T) {
 	mm := metamodel.New()
-	_, ok := mm.UnzipUrl(sampleUrl, "model.json")
+	_, ok := mm.UnpackFromUrl(sampleUrl, "model.json")
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
@@ -154,7 +154,7 @@ func TestZipAndUnzipUrl(t *testing.T) {
 	}
 
 	m := metamodel.New()
-	_, unzipOk := m.UnzipUrl(urlOut, "model.json")
+	_, unzipOk := m.UnpackFromUrl(urlOut, "model.json")
 	if !unzipOk {
 		t.Fatalf("failed to unzip")
 	}
@@ -162,7 +162,7 @@ func TestZipAndUnzipUrl(t *testing.T) {
 }
 func TestUnzipUrl(t *testing.T) {
 	mm := metamodel.New()
-	_, ok := mm.UnzipUrl(sampleUrl, "model.json")
+	_, ok := mm.UnpackFromUrl(sampleUrl, "model.json")
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}

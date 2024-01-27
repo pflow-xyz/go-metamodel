@@ -387,7 +387,7 @@ type MetaModel interface {
 	Execute(...Vector) Process
 	Edit() Editor
 	Node(oid string) Node
-	UnzipUrl(url string, filename string) (obj string, ok bool)
+	UnpackFromUrl(url string, filename string) (obj string, ok bool)
 	ZipUrl(...string) (url string, ok bool)
 	GetViewPort() (int, int, int, int)
 	ToDeclaration() (obj []byte, ok bool)
@@ -591,48 +591,13 @@ func (m *Model) ZipUrl(path ...string) (url string, ok bool) {
 	return "?z=" + data, true
 }
 
-func (m *Model) UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
-	queryString := ""
-	ok = false
-	if i := strings.Index(url, "?"); i > -1 {
-		queryString = url[i+1:]
-		url = url[:i]
+
+func (m *Model) UnpackFromUrl(url string, filename string) (sourceJson string, ok bool) {
+	sourceJson, ok = UnzipUrl(url, filename)
+	if ok {
+		ok = m.loadJsonDefinition(sourceJson)
 	}
-	z := ""
-	for _, param := range strings.Split(queryString, "&") {
-		if strings.HasPrefix(param, "z=") {
-			z = param[2:]
-		}
-	}
-	// base64 decode z=
-	if z != "" {
-		decoded := make([]byte, len(z))
-		_, err := b64.StdEncoding.Decode(decoded, []byte(z))
-		if err != nil {
-			panic(err)
-		}
-		// open zip archive
-		zipReader, zipErr := zip.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
-		if zipErr != nil {
-			panic(zipErr)
-		}
-		for _, file := range zipReader.File {
-			if file.Name == filename {
-				fileReader, err := file.Open()
-				if err != nil {
-					panic(err)
-				}
-				buf := new(bytes.Buffer)
-				_, err = buf.ReadFrom(fileReader)
-				if err != nil {
-					panic(err)
-				}
-				ok = m.loadJsonDefinition(buf.String())
-				return sourceJson, ok
-			}
-		}
-	}
-	return sourceJson, false
+	return sourceJson, ok
 }
 
 func (m *Model) Guard(source Node, target Node, weight int64) {
@@ -996,4 +961,48 @@ func (sm *StateMachine) TokenCount(label string) int64 {
 		panic(ExpectedPlace)
 	}
 	return sm.state[p.Offset]
+}
+
+func UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
+	queryString := ""
+	ok = false
+	if i := strings.Index(url, "?"); i > -1 {
+		queryString = url[i+1:]
+		url = url[:i]
+	}
+	z := ""
+	for _, param := range strings.Split(queryString, "&") {
+		if strings.HasPrefix(param, "z=") {
+			z = param[2:]
+		}
+	}
+	// base64 decode z=
+	if z != "" {
+		decoded := make([]byte, len(z))
+		_, err := b64.StdEncoding.Decode(decoded, []byte(z))
+		if err != nil {
+			panic(err)
+		}
+		// open zip archive
+		zipReader, zipErr := zip.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
+		if zipErr != nil {
+			panic(zipErr)
+		}
+		for _, file := range zipReader.File {
+			if file.Name == filename {
+				fileReader, err := file.Open()
+				if err != nil {
+					panic(err)
+				}
+				buf := new(bytes.Buffer)
+				_, err = buf.ReadFrom(fileReader)
+				if err != nil {
+					panic(err)
+				}
+				sourceJson = buf.String()
+				return sourceJson, true
+			}
+		}
+	}
+	return sourceJson, false
 }

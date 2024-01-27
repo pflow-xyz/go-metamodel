@@ -9,6 +9,7 @@ import (
 type Model struct {
 	ID                int       `json:"id"`
 	IpfsCid           string    `json:"cid"`
+	Referer           string    `json:"-"`
 	Base64GzippedJson string    `json:"data"`
 	Title             string    `json:"title"`
 	Description       string    `json:"description"`
@@ -32,7 +33,7 @@ func (d Document) Cid() string {
 
 func (m *Model) ToDocument() Document {
 	mm := metamodel.New()
-	_, ok := mm.UnzipUrl("?z="+m.Base64GzippedJson, "model.json")
+	_, ok := mm.UnpackFromUrl("?z="+m.Base64GzippedJson, "model.json")
 	if !ok {
 		panic("Failed to unzip model")
 	}
@@ -48,7 +49,7 @@ func (m *Model) ToDocument() Document {
 
 func (m *Model) MetaModel() (string, metamodel.MetaModel) {
 	mm := metamodel.New()
-	jsonData, ok := mm.UnzipUrl("?z="+m.Base64GzippedJson, "model.json")
+	jsonData, ok := mm.UnpackFromUrl("?z="+m.Base64GzippedJson, "model.json")
 	if !ok {
 		panic("Failed to unzip model")
 	}

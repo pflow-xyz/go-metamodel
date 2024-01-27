@@ -40,19 +40,19 @@ func NewSvg(out io.Writer, xy ...int) *SvgImage {
 }
 
 func (i *SvgImage) newSvgImage(xy ...int) *SvgImage {
-	if len(xy) == 2 {
+	if len(xy) >= 2 {
 		i.width = xy[0]
 		i.height = xy[1]
 	} else {
 		i.width = 1024
 		i.height = 768
 	}
-
 	if len(xy) == 6 {
-		i.writerOut.Write([]byte(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%v\" height=\"%v\" viewBox=\"%v %v %v %v\">\n", i.width, i.height, xy[2], xy[3], xy[4], xy[5])))
+		i.writerOut.Write([]byte(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%v\" height=\"%v\" viewBox=\"%v %v %v %v\">\n", xy[0], xy[1], xy[2], xy[3], xy[4], xy[5])))
 	} else {
 		i.writerOut.Write([]byte(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%v\" height=\"%v\" >\n", i.width, i.height)))
 	}
+
 	i.writerOut.Write([]byte(
 		`<defs><marker id="markerArrow1" markerWidth="23" markerHeight="13" refX="31" refY="6" orient="auto">` +
 			`<rect width="28" height="3" fill="white" stroke="white" x="3" y="5"/><path d="M2,2 L2,11 L10,6 L2,2"/></marker>` +
