@@ -3,7 +3,7 @@ package image
 import (
 	"bufio"
 	"fmt"
-	"github.com/pflow-dev/go-metamodel/metamodel"
+	"github.com/pflow-dev/go-metamodel/v2/metamodel"
 	"io"
 	"math"
 	"os"

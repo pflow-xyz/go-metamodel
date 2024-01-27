@@ -1,8 +1,8 @@
 package model
 
 import (
-	"github.com/pflow-dev/go-metamodel/codec"
-	"github.com/pflow-dev/go-metamodel/metamodel"
+	"github.com/pflow-dev/go-metamodel/v2/codec"
+	"github.com/pflow-dev/go-metamodel/v2/metamodel"
 	"time"
 )
 
