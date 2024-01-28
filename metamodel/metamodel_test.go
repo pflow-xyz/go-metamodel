@@ -161,10 +161,19 @@ func TestZipAndUnzipUrl(t *testing.T) {
 }
 func TestUnzipUrl(t *testing.T) {
 	mm := metamodel.New()
-	_, ok := mm.UnpackFromUrl(sampleUrl, "model.json")
+	data, ok := mm.UnpackFromUrl(sampleUrl, "model.json")
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
+	zdata, zok := metamodel.ToEncodedZip([]byte(data), "model.json")
+	if !zok {
+		t.Fatalf("failed to encode")
+	}
+	_, ok = mm.UnpackFromUrl("?z="+zdata, "model.json")
+	if !ok {
+		t.Fatalf("failed to unzip")
+	}
+
 	p := mm.Execute()
 	testCmd{Process: p, action: "bar", expectPass: true}.assertInhibited(t)
 	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)

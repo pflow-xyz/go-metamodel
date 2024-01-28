@@ -591,7 +591,6 @@ func (m *Model) ZipUrl(path ...string) (url string, ok bool) {
 	return "?z=" + data, true
 }
 
-
 func (m *Model) UnpackFromUrl(url string, filename string) (sourceJson string, ok bool) {
 	sourceJson, ok = UnzipUrl(url, filename)
 	if ok {
@@ -963,6 +962,7 @@ func (sm *StateMachine) TokenCount(label string) int64 {
 	return sm.state[p.Offset]
 }
 
+// UnzipUrl extracts a file from a z= parameter
 func UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
 	queryString := ""
 	ok = false
@@ -1005,4 +1005,25 @@ func UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
 		}
 	}
 	return sourceJson, false
+}
+
+// ToEncodedZip converts a byte array to a base64 encoded zip archive
+func ToEncodedZip(fileData []byte, filename string) (string, bool) {
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+	zipFile, err := zipWriter.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	_, err = zipFile.Write(fileData)
+	if err != nil {
+		panic(err)
+	}
+	err = zipWriter.Close()
+	if err != nil {
+		panic(err)
+	}
+	var encoder = b64.StdEncoding.Strict()
+	data := encoder.EncodeToString(buf.Bytes())
+	return data, true
 }
