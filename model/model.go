@@ -6,16 +6,20 @@ import (
 	"time"
 )
 
+// Zblob is a data wrapper for encapsulating a model
+type Zblob struct {
+	ID           int64     `json:"-"`
+	IpfsCid      string    `json:"cid"`
+	Base64Zipped string    `json:"data"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	Keywords     string    `json:"keywords"`
+	Referer      string    `json:"-"`
+	CreatedAt    time.Time `json:"created"`
+}
+
 type Model struct {
-	ID                int       `json:"id"`
-	IpfsCid           string    `json:"cid"`
-	Referer           string    `json:"-"`
-	Base64GzippedJson string    `json:"data"`
-	Title             string    `json:"title"`
-	Description       string    `json:"description"`
-	Keywords          string    `json:"keywords"`
-	CreatedAt         time.Time `json:"created"`
-	PublishedAt       time.Time `json:"published"`
+	*Zblob
 }
 
 type Document struct {
@@ -24,32 +28,43 @@ type Document struct {
 	Description string                      `json:"description"`
 	Keywords    string                      `json:"keywords"`
 	Declaration metamodel.DeclarationObject `json:"declaration"`
-	PublishedAt time.Time                   `json:"published"`
+}
+
+func getMetaModel(data string) metamodel.MetaModel {
+	mm := metamodel.New()
+	_, ok := mm.UnpackFromUrl("?z="+data, "model.json")
+	if !ok {
+		panic("Failed to unzip model")
+	}
+	return mm
+}
+
+func assertValid(data string) {
+	_ = getMetaModel(data)
+}
+
+func (z *Zblob) ToModel() Model {
+	assertValid(z.Base64Zipped)
+	return Model{Zblob: z}
+}
+func (z *Zblob) ToDocument() Document {
+	mm := getMetaModel(z.Base64Zipped)
+	return Document{
+		ModelCid:    z.IpfsCid,
+		Title:       z.Title,
+		Description: z.Description,
+		Keywords:    z.Keywords,
+		Declaration: mm.ToDeclarationObject(),
+	}
 }
 
 func (d Document) Cid() string {
 	return codec.ToOid(codec.Marshal(d)).String()
 }
 
-func (m *Model) ToDocument() Document {
-	mm := metamodel.New()
-	_, ok := mm.UnpackFromUrl("?z="+m.Base64GzippedJson, "model.json")
-	if !ok {
-		panic("Failed to unzip model")
-	}
-	return Document{
-		ModelCid:    m.IpfsCid,
-		Title:       m.Title,
-		Description: m.Description,
-		Keywords:    m.Keywords,
-		Declaration: mm.ToDeclarationObject(),
-		PublishedAt: m.PublishedAt,
-	}
-}
-
 func (m *Model) MetaModel() (string, metamodel.MetaModel) {
 	mm := metamodel.New()
-	jsonData, ok := mm.UnpackFromUrl("?z="+m.Base64GzippedJson, "model.json")
+	jsonData, ok := mm.UnpackFromUrl("?z="+m.Base64Zipped, "model.json")
 	if !ok {
 		panic("Failed to unzip model")
 	}
@@ -60,6 +75,6 @@ func (m *Model) Declare(args ...func(metamodel.Declaration)) {
 	mm := metamodel.New()
 	mm.Define(args...)
 	url, _ := mm.ZipUrl()
-	m.Base64GzippedJson = url[3:]
-	m.IpfsCid = codec.ToOid(codec.Marshal(m.Base64GzippedJson)).String()
+	m.Base64Zipped = url[3:]
+	m.IpfsCid = codec.ToOid(codec.Marshal(m.Base64Zipped)).String()
 }
