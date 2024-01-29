@@ -49,7 +49,11 @@ func (app *App) AppPage(vars map[string]string, w http.ResponseWriter, r *http.R
 		http.Redirect(w, r, "/p/"+cid+"/", http.StatusFound)
 		return
 	}
-	m := model.Model{}
+	m := model.Model{
+		Zblob: &model.Zblob{
+			IpfsCid: cid,
+		},
+	}
 	if vars["pflowCid"] != "" {
 		m = app.Storage.Model.GetByCid(vars["pflowCid"]).ToModel()
 		if m.ID != 0 && m.IpfsCid == vars["pflowCid"] {
