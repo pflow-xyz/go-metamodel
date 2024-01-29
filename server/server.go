@@ -51,13 +51,12 @@ func (app *App) AppPage(vars map[string]string, w http.ResponseWriter, r *http.R
 	}
 	m := model.Model{}
 	if vars["pflowCid"] != "" {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		m = app.Storage.Model.GetByCid(vars["pflowCid"]).ToModel()
 		if m.ID != 0 && m.IpfsCid == vars["pflowCid"] {
 			m.MetaModel()
 		}
 	}
-	_ = app.IndexPage().ExecuteTemplate(w, "index.html", m)
+	app.IndexPage().ExecuteTemplate(w, "index.html", m.Zblob)
 }
 
 func (app *App) SvgHandler(vars map[string]string, w http.ResponseWriter, r *http.Request) {
@@ -98,10 +97,6 @@ func (app *App) JsonHandler(vars map[string]string, w http.ResponseWriter, r *ht
 		m := app.Storage.Model.GetByCid(vars["pflowCid"])
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		mm.UnpackFromUrl("?z="+m.Base64Zipped, "model.json")
-		app.Event("viewJson", map[string]interface{}{
-			"id":      m.ID,
-			"ipfsCid": m.IpfsCid,
-		})
 		data, _ := json.MarshalIndent(mm.ToDeclarationObject(), "", "  ")
 		_, err := w.Write(data)
 		if err != nil {
@@ -121,7 +116,6 @@ func (app *App) SandboxHandler(vars map[string]string, w http.ResponseWriter, r 
 			http.Error(w, "Failed to unzip snippet", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		templateData := struct {
 			IpfsCid    string
 			SourceCode string
@@ -129,6 +123,6 @@ func (app *App) SandboxHandler(vars map[string]string, w http.ResponseWriter, r 
 			IpfsCid:    vars["pflowCid"],
 			SourceCode: sourceCode,
 		}
-		_ = app.SandboxPage().ExecuteTemplate(w, "index.html", templateData)
+		app.SandboxPage().ExecuteTemplate(w, "sandbox.html", templateData)
 	}
 }
