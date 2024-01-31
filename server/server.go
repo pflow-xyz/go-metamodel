@@ -25,6 +25,7 @@ type BlobAccessor interface {
 	GetMaxId() int64
 	Create(ipfsCid, base64Zipped, title, description, keywords, referrer string) (int64, error)
 }
+
 type Storage struct {
 	Model   BlobAccessor
 	Snippet BlobAccessor
@@ -38,6 +39,7 @@ type Service interface {
 	CheckForSnippet(hostname string, url string, referrer string) (string, bool)
 	CheckForModel(hostname string, url string, referrer string) (string, bool)
 }
+
 type App struct {
 	Service
 	Storage
@@ -113,20 +115,18 @@ func (app *App) SandboxHandler(vars map[string]string, w http.ResponseWriter, r 
 	cid, found := app.CheckForSnippet(r.Host, r.URL.String(), r.Header.Get("Referer"))
 	if found {
 		http.Redirect(w, r, "/sandbox/"+cid+"/", http.StatusFound)
-	} else if vars["pflowCid"] != "" {
-		rec := app.Storage.Snippet.GetByCid(vars["pflowCid"])
-		sourceCode, ok := metamodel.UnzipUrl("?z="+rec.Base64Zipped, "declaration.js")
-		if !ok {
-			http.Error(w, "Failed to unzip snippet", http.StatusInternalServerError)
-			return
-		}
-		templateData := struct {
-			IpfsCid    string
-			SourceCode string
-		}{
-			IpfsCid:    vars["pflowCid"],
-			SourceCode: sourceCode,
-		}
-		app.SandboxPage().ExecuteTemplate(w, "sandbox.html", templateData)
+		return
 	}
+	templateData := struct {
+		IpfsCid    string
+		SourceCode string
+	}{
+		IpfsCid:    vars["pflowCid"],
+		SourceCode: "",
+	}
+	if vars["pflowCid"] != "" {
+		rec := app.Storage.Snippet.GetByCid(vars["pflowCid"])
+		templateData.SourceCode, _ = metamodel.UnzipUrl("?z="+rec.Base64Zipped, "declaration.js")
+	}
+	app.SandboxPage().ExecuteTemplate(w, "sandbox.html", templateData)
 }
