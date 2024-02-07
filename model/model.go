@@ -47,6 +47,7 @@ func (z *Zblob) ToModel() Model {
 	assertValid(z.Base64Zipped)
 	return Model{Zblob: z}
 }
+
 func (z *Zblob) ToDocument() Document {
 	mm := getMetaModel(z.Base64Zipped)
 	return Document{

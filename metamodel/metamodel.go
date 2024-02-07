@@ -180,12 +180,12 @@ func (n *node) Tx(weight int64, target Node) Node {
 
 // Guard defines an inhibitor rule
 func (n *node) Guard(weight int64, target Node) Node {
-	var inverted = false
+	var isReadArc = false
 	if n.IsTransition() {
 		if !target.IsPlace() {
 			panic(BadInhibitorTarget)
 		}
-		inverted = true
+		isReadArc = true
 	}
 	if target.IsPlace() {
 		if !n.IsTransition() {
@@ -200,7 +200,7 @@ func (n *node) Guard(weight int64, target Node) Node {
 		Target:    target,
 		Weight:    weight,
 		Inhibitor: true,
-		Inverted:  inverted,
+		Read:      isReadArc,
 	})
 	return n
 }
@@ -266,7 +266,7 @@ type Arc struct {
 	Target    Node
 	Weight    int64
 	Inhibitor bool
-	Inverted  bool
+	Read      bool
 }
 
 type PetriNet struct {
@@ -612,7 +612,7 @@ func (m *Model) Guard(source Node, target Node, weight int64) {
 			Target:    target,
 			Weight:    weight,
 			Inhibitor: true,
-			Inverted:  true,
+			Read:      true,
 		})
 	}
 	if source.IsPlace() {
@@ -624,7 +624,7 @@ func (m *Model) Guard(source Node, target Node, weight int64) {
 			Target:    target,
 			Weight:    weight,
 			Inhibitor: true,
-			Inverted:  false,
+			Read:      false,
 		})
 	}
 }
@@ -712,7 +712,7 @@ func (m *Model) Index() Editor {
 	}
 	for _, arc := range m.Arcs {
 		if arc.Inhibitor {
-			if arc.Inverted {
+			if arc.Read {
 				g := &Guard{
 					Label:    arc.Target.GetPlace().Label,
 					Delta:    m.EmptyVector(),
