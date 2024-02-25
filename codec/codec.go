@@ -22,7 +22,7 @@ func (o Oid) Bytes() []byte {
 func toCid(data []byte) (cid.Cid, error) {
 	return cid.Prefix{
 		Version:  1,
-		Codec:    cid.Raw,
+		Codec:    0x55,
 		MhType:   multihash.SHA2_256,
 		MhLength: -1, // default length
 	}.Sum(data)
