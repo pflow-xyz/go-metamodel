@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Position defines location of a Place or Transition element
@@ -962,6 +963,38 @@ func (sm *StateMachine) TokenCount(label string) int64 {
 	return sm.state[p.Offset]
 }
 
+// UnzipBase64EncodedString extracts a file from a base64 encoded string
+func UnzipBase64EncodedString(base64String string, filename string) (sourceJson string, ok bool) {
+	// base64 decode the string
+	decoded := make([]byte, len(base64String))
+	_, err := b64.StdEncoding.Decode(decoded, []byte(base64String))
+	if err != nil {
+		panic(err)
+	}
+	// open zip archive
+	zipReader, zipErr := zip.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
+	if zipErr != nil {
+		panic(zipErr)
+	}
+	for _, file := range zipReader.File {
+		if file.Name == filename {
+			fileReader, err := file.Open()
+			if err != nil {
+				panic(err)
+			}
+			buf := new(bytes.Buffer)
+			_, err = buf.ReadFrom(fileReader)
+			if err != nil {
+				panic(err)
+			}
+			sourceJson = buf.String()
+			return sourceJson, true
+		}
+	}
+	return sourceJson, false
+}
+
+// UnzipUrl extracts a file from a z= parameter
 // UnzipUrl extracts a file from a z= parameter
 func UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
 	queryString := ""
@@ -976,53 +1009,43 @@ func UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
 			z = param[2:]
 		}
 	}
-	// base64 decode z=
+	// use the new function UnzipBase64EncodedString
 	if z != "" {
-		decoded := make([]byte, len(z))
-		_, err := b64.StdEncoding.Decode(decoded, []byte(z))
-		if err != nil {
-			panic(err)
-		}
-		// open zip archive
-		zipReader, zipErr := zip.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
-		if zipErr != nil {
-			panic(zipErr)
-		}
-		for _, file := range zipReader.File {
-			if file.Name == filename {
-				fileReader, err := file.Open()
-				if err != nil {
-					panic(err)
-				}
-				buf := new(bytes.Buffer)
-				_, err = buf.ReadFrom(fileReader)
-				if err != nil {
-					panic(err)
-				}
-				sourceJson = buf.String()
-				return sourceJson, true
-			}
-		}
+		return UnzipBase64EncodedString(z, filename)
 	}
 	return sourceJson, false
 }
 
 // ToEncodedZip converts a byte array to a base64 encoded zip archive
+// ToEncodedZip converts a byte array to a base64 encoded zip archive
 func ToEncodedZip(fileData []byte, filename string) (string, bool) {
 	var buf bytes.Buffer
 	zipWriter := zip.NewWriter(&buf)
-	zipFile, err := zipWriter.Create(filename)
+
+	// Create a new zip file header
+	header := &zip.FileHeader{
+		Name: filename,
+	}
+
+	// The Times 03/Jan/2009 Chancellor on brink of second bailout for banks
+	header.Modified = time.Date(2009, time.January, 3, 0, 0, 0, 0, time.UTC)
+
+	// Create the file in the archive
+	zipFile, err := zipWriter.CreateHeader(header)
 	if err != nil {
 		panic(err)
 	}
+
 	_, err = zipFile.Write(fileData)
 	if err != nil {
 		panic(err)
 	}
+
 	err = zipWriter.Close()
 	if err != nil {
 		panic(err)
 	}
+
 	var encoder = b64.StdEncoding.Strict()
 	data := encoder.EncodeToString(buf.Bytes())
 	return data, true
