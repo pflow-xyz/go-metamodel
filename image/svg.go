@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/pflow-dev/go-metamodel/v2/metamodel"
+	"github.com/pflow-dev/go-metamodel/v2/vasm"
 	"io"
 	"math"
 	"os"
@@ -98,7 +99,7 @@ func (i *SvgImage) MarkerEnd() {
 }
 func (i *SvgImage) Render(m metamodel.MetaModel, initialVectors ...metamodel.Vector) {
 	net := m.Net()
-	i.stateMachine = m.Execute(initialVectors...)
+	i.stateMachine = vasm.Execute(m.Net(), initialVectors...)
 	for _, a := range net.Arcs {
 		i.arc(a)
 	}

@@ -1,13 +1,9 @@
 package metamodel
 
 import (
-	"archive/zip"
-	"bytes"
-	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
-	"time"
+	"github.com/pflow-dev/go-metamodel/v2/compression"
 )
 
 // Position defines location of a Place or Transition element
@@ -316,7 +312,6 @@ const (
 	InhibitedTransition = "transition is inhibited by place %s"
 	UnexpectedArguments = "expected %v arguments got %v"
 	OK                  = "OK"
-	defaultMultiple     = 1
 )
 
 type Op struct {
@@ -385,10 +380,9 @@ type Editor interface {
 type MetaModel interface {
 	Net() *PetriNet
 	Define(...func(Declaration)) MetaModel
-	Execute(...Vector) Process
 	Edit() Editor
 	Node(oid string) Node
-	UnpackFromUrl(url string, filename string) (obj string, ok bool)
+	UnpackFromUrl(url string) (obj string, ok bool)
 	ZipUrl(...string) (url string, ok bool)
 	GetViewPort() (int, int, int, int)
 	ToDeclaration() (obj []byte, ok bool)
@@ -564,36 +558,27 @@ func (m *Model) loadJsonDefinition(obj string) (ok bool) {
 	return true
 }
 
-func (m *Model) ZipUrl(path ...string) (url string, ok bool) {
+func (m *Model) ZipUrl(path ...string) (urlString string, ok bool) {
 	jsonObj, ok := m.ToDeclaration()
 	if !ok {
 		return "", false
 	}
-	var buf bytes.Buffer
-	zipWriter := zip.NewWriter(&buf)
-	zipFile, err := zipWriter.Create("model.json")
-	if err != nil {
-		panic(err)
+
+	// Compress the JSON object using Brotli
+	compressedData, ok := compression.CompressBrotliEncode([]byte(jsonObj))
+	if !ok {
+		return "", false
 	}
-	_, err = zipFile.Write(jsonObj)
-	if err != nil {
-		panic(err)
-	}
-	err = zipWriter.Close()
-	if err != nil {
-		panic(err)
-	}
-	var encoder = b64.StdEncoding.Strict()
-	data := encoder.EncodeToString(buf.Bytes())
+
 	if len(path) > 0 {
-		url = path[0] + "?z=" + data
-		return url, true
+		urlString = path[0] + "?z=" + compressedData
+		return urlString, true
 	}
-	return "?z=" + data, true
+	return "?z=" + compressedData, true
 }
 
-func (m *Model) UnpackFromUrl(url string, filename string) (sourceJson string, ok bool) {
-	sourceJson, ok = UnzipUrl(url, filename)
+func (m *Model) UnpackFromUrl(url string) (sourceJson string, ok bool) {
+	sourceJson, ok = compression.DecompressEncodedUrl(url)
 	if ok {
 		ok = m.loadJsonDefinition(sourceJson)
 	}
@@ -769,32 +754,6 @@ func (m *Model) Define(def ...func(declaration Declaration)) MetaModel {
 	return m
 }
 
-// Execute run the m
-func (m *Model) Execute(initialVec ...Vector) Process {
-
-	sm := new(StateMachine)
-	sm.m = m
-	switch len(initialVec) {
-	case 0:
-		sm.state = m.InitialVector()
-		sm.capacity = m.CapacityVector()
-	case 1:
-		sm.state = initialVec[0]
-		sm.capacity = m.CapacityVector()
-	case 2:
-		sm.state = initialVec[0]
-		sm.capacity = initialVec[1]
-	default:
-		panic(fmt.Sprintf(UnexpectedArguments, 2, len(initialVec)))
-	}
-	if len(sm.state) == 0 {
-		sm.state = m.InitialVector()
-	} else if len(sm.state) != len(sm.capacity) {
-		sm.state = m.EmptyVector()
-	}
-	return sm
-}
-
 // Edit returns the internal interface used to edit and reindex a model
 func (m *Model) Edit() Editor {
 	return m
@@ -886,167 +845,4 @@ func (m *Model) TransitionSeq() Label {
 			i++
 		}
 	}
-}
-
-type StateMachine struct {
-	m        *Model
-	state    Vector
-	capacity Vector
-}
-
-func (sm *StateMachine) TestFire(op Op) (flag bool, msg string, out Vector) {
-	txn := sm.m.Transitions[op.Action]
-	if txn == nil {
-		return false, UnknownAction, sm.GetState()
-	}
-	if op.Role != "" && txn.Role.Label != op.Role {
-		return false, FailedRoleAssertion, sm.GetState()
-	}
-	if op.Multiple < 0 {
-		return false, BadMultiple, sm.GetState()
-	} else if op.Multiple == 0 {
-		op.Multiple = defaultMultiple
-	}
-	isInhibited, label := sm.Inhibited(op)
-	if isInhibited {
-		return false, fmt.Sprintf(InhibitedTransition, label), out
-	}
-	flag, msg, out = Add(sm.state, txn.Delta, op.Multiple, sm.capacity)
-	if !flag {
-		return false, msg, out
-	}
-	return true, OK, out // REVIEW: match lua implementation to return Role
-}
-
-func (sm *StateMachine) Fire(op Op) (ok bool, msg string, out Vector) {
-	// TODO: refactor to support wf-nets and elementary modelTypes
-	ok, msg, out = sm.TestFire(op)
-	if ok {
-		for i, v := range out {
-			sm.state[i] = v
-		}
-	}
-	return ok, msg, out
-}
-
-func (sm *StateMachine) Inhibited(op Op) (inhibited bool, msg string) {
-	tx := sm.m.Transitions[op.Action]
-	if tx == nil {
-		panic(UnknownAction)
-	}
-	for _, g := range tx.Guards {
-		flag, _, _ := Add(sm.state, g.Delta, 1, sm.m.EmptyVector())
-		if g.Inverted {
-			if !flag {
-				return true, g.Label
-			}
-		} else {
-			if flag {
-				return true, g.Label
-			}
-		}
-	}
-	return false, msg
-}
-
-func (sm *StateMachine) GetState() Vector {
-	s := make([]int64, len(sm.state))
-	copy(s, sm.state)
-	return s
-}
-
-func (sm *StateMachine) TokenCount(label string) int64 {
-	p := sm.m.Places[label]
-	if p == nil {
-		panic(ExpectedPlace)
-	}
-	return sm.state[p.Offset]
-}
-
-// UnzipBase64EncodedString extracts a file from a base64 encoded string
-func UnzipBase64EncodedString(base64String string, filename string) (sourceJson string, ok bool) {
-	// base64 decode the string
-	decoded := make([]byte, len(base64String))
-	_, err := b64.StdEncoding.Decode(decoded, []byte(base64String))
-	if err != nil {
-		panic(err)
-	}
-	// open zip archive
-	zipReader, zipErr := zip.NewReader(bytes.NewReader(decoded), int64(len(decoded)))
-	if zipErr != nil {
-		panic(zipErr)
-	}
-	for _, file := range zipReader.File {
-		if file.Name == filename {
-			fileReader, err := file.Open()
-			if err != nil {
-				panic(err)
-			}
-			buf := new(bytes.Buffer)
-			_, err = buf.ReadFrom(fileReader)
-			if err != nil {
-				panic(err)
-			}
-			sourceJson = buf.String()
-			return sourceJson, true
-		}
-	}
-	return sourceJson, false
-}
-
-// UnzipUrl extracts a file from a z= parameter
-// UnzipUrl extracts a file from a z= parameter
-func UnzipUrl(url string, filename string) (sourceJson string, ok bool) {
-	queryString := ""
-	ok = false
-	if i := strings.Index(url, "?"); i > -1 {
-		queryString = url[i+1:]
-		url = url[:i]
-	}
-	z := ""
-	for _, param := range strings.Split(queryString, "&") {
-		if strings.HasPrefix(param, "z=") {
-			z = param[2:]
-		}
-	}
-	// use the new function UnzipBase64EncodedString
-	if z != "" {
-		return UnzipBase64EncodedString(z, filename)
-	}
-	return sourceJson, false
-}
-
-// ToEncodedZip converts a byte array to a base64 encoded zip archive
-// ToEncodedZip converts a byte array to a base64 encoded zip archive
-func ToEncodedZip(fileData []byte, filename string) (string, bool) {
-	var buf bytes.Buffer
-	zipWriter := zip.NewWriter(&buf)
-
-	// Create a new zip file header
-	header := &zip.FileHeader{
-		Name: filename,
-	}
-
-	// The Times 03/Jan/2009 Chancellor on brink of second bailout for banks
-	header.Modified = time.Date(2009, time.January, 3, 0, 0, 0, 0, time.UTC)
-
-	// Create the file in the archive
-	zipFile, err := zipWriter.CreateHeader(header)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = zipFile.Write(fileData)
-	if err != nil {
-		panic(err)
-	}
-
-	err = zipWriter.Close()
-	if err != nil {
-		panic(err)
-	}
-
-	var encoder = b64.StdEncoding.Strict()
-	data := encoder.EncodeToString(buf.Bytes())
-	return data, true
 }

@@ -3,6 +3,7 @@ module github.com/pflow-dev/go-metamodel/v2
 go 1.19
 
 require (
+	github.com/andybalholm/brotli v1.1.0
 	github.com/gibson042/canonicaljson-go v1.0.3
 	github.com/ipfs/go-cid v0.4.1
 	github.com/multiformats/go-multibase v0.2.0

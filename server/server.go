@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/pflow-dev/go-metamodel/v2/compression"
 	"github.com/pflow-dev/go-metamodel/v2/image"
 	"github.com/pflow-dev/go-metamodel/v2/metamodel"
 	"github.com/pflow-dev/go-metamodel/v2/model"
+	"github.com/pflow-dev/go-metamodel/v2/zblob"
 	"html/template"
 	"net/http"
 )
@@ -20,8 +22,8 @@ func WithVars(handler HandlerWithVars, getVarsFunc VarsFactory) http.HandlerFunc
 }
 
 type BlobAccessor interface {
-	Get(id int64) *model.Zblob
-	GetByCid(cid string) *model.Zblob
+	Get(id int64) *zblob.Zblob
+	GetByCid(cid string) *zblob.Zblob
 	GetMaxId() int64
 	Create(ipfsCid, base64Zipped, title, description, keywords, referrer string) (int64, error)
 }
@@ -33,7 +35,6 @@ type Storage struct {
 
 type Service interface {
 	IndexPage() *template.Template
-	SandboxPage() *template.Template
 	Event(eventType string, params map[string]interface{})
 	GetState(r *http.Request) (state metamodel.Vector, ok bool)
 	CheckForSnippet(hostname string, url string, referrer string) (string, bool)
@@ -52,12 +53,12 @@ func (app *App) AppPage(vars map[string]string, w http.ResponseWriter, r *http.R
 		return
 	}
 	m := model.Model{
-		Zblob: &model.Zblob{
+		Zblob: &zblob.Zblob{
 			IpfsCid: cid,
 		},
 	}
 	if vars["pflowCid"] != "" {
-		m = app.Storage.Model.GetByCid(vars["pflowCid"]).ToModel()
+		m = *model.FromZblob(app.Storage.Model.GetByCid(vars["pflowCid"]))
 		if m.ID != 0 && m.IpfsCid == vars["pflowCid"] {
 			m.MetaModel()
 		}
@@ -75,7 +76,7 @@ func (app *App) SvgHandler(vars map[string]string, w http.ResponseWriter, r *htt
 		return
 	}
 	w.Header().Set("Content-Type", "image/svg+xml ; charset=utf-8")
-	m := app.Storage.Model.GetByCid(vars["pflowCid"]).ToModel()
+	m := model.FromZblob(app.Storage.Model.GetByCid(vars["pflowCid"]))
 	_, mm := m.MetaModel()
 	if m.IpfsCid != vars["pflowCid"] {
 		return
@@ -102,7 +103,7 @@ func (app *App) JsonHandler(vars map[string]string, w http.ResponseWriter, r *ht
 	} else if vars["pflowCid"] != "" {
 		m := app.Storage.Model.GetByCid(vars["pflowCid"])
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		mm.UnpackFromUrl("?z="+m.Base64Zipped, "model.json")
+		mm.UnpackFromUrl("?z=" + m.Base64Zipped)
 		data, _ := json.MarshalIndent(mm.ToDeclarationObject(), "", "  ")
 		_, err := w.Write(data)
 		if err != nil {
@@ -126,7 +127,6 @@ func (app *App) SandboxHandler(vars map[string]string, w http.ResponseWriter, r 
 	}
 	if vars["pflowCid"] != "" {
 		rec := app.Storage.Snippet.GetByCid(vars["pflowCid"])
-		templateData.SourceCode, _ = metamodel.UnzipUrl("?z="+rec.Base64Zipped, "declaration.js")
+		templateData.SourceCode, _ = compression.DecompressEncodedUrl("?z=" + rec.Base64Zipped)
 	}
-	app.SandboxPage().ExecuteTemplate(w, "sandbox.html", templateData)
 }

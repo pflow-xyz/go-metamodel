@@ -1,4 +1,4 @@
-package codec
+package oid
 
 import (
 	json "github.com/gibson042/canonicaljson-go"

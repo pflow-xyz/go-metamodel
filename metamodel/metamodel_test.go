@@ -2,12 +2,14 @@ package metamodel_test
 
 import (
 	"encoding/json"
+	"github.com/pflow-dev/go-metamodel/v2/compression"
 	"github.com/pflow-dev/go-metamodel/v2/metamodel"
+	"github.com/pflow-dev/go-metamodel/v2/vasm"
 	"testing"
 )
 
 // sampleUrl is a base64 encoded zip file containing a json file
-const sampleUrl = "https://pflow.dev/p/?z=UEsDBAoAAAAAACSCnFfPFUHSdwIAAHcCAAAKAAAAbW9kZWwuanNvbnsKICJtb2RlbFR5cGUiOiAicGV0cmlOZXQiLAogInZlcnNpb24iOiAidjAiLAogInBsYWNlcyI6IHsKICAiZm9vIjogewogICAib2Zmc2V0IjogMCwKICAgIngiOiAzNjQsCiAgICJ5IjogMzI2LAogICAiaW5pdGlhbCI6IDEKICB9CiB9LAogInRyYW5zaXRpb25zIjogewogICJhZGQiOiB7CiAgICJ4IjogMjQ2LAogICAieSI6IDIwNQogIH0sCiAgInN1YiI6IHsKICAgIngiOiA0NzUsCiAgICJ5IjogMjA2CiAgfSwKICAiYmFyIjogewogICAieCI6IDI0MywKICAgInkiOiA0MzkKICB9LAogICJiYXoiOiB7CiAgICJ4IjogNDc2LAogICAieSI6IDQ0MwogIH0KIH0sCiAiYXJjcyI6IFsKICB7CiAgICJzb3VyY2UiOiAiYWRkIiwKICAgInRhcmdldCI6ICJmb28iLAogICAid2VpZ2h0IjogMQogIH0sCiAgewogICAic291cmNlIjogImZvbyIsCiAgICJ0YXJnZXQiOiAic3ViIiwKICAgIndlaWdodCI6IDEKICB9LAogIHsKICAgInNvdXJjZSI6ICJiYXIiLAogICAidGFyZ2V0IjogImZvbyIsCiAgICJ3ZWlnaHQiOiAzLAogICAiaW5oaWJpdCI6IHRydWUKICB9LAogIHsKICAgInNvdXJjZSI6ICJmb28iLAogICAidGFyZ2V0IjogImJheiIsCiAgICJ3ZWlnaHQiOiAxLAogICAiaW5oaWJpdCI6IHRydWUKICB9CiBdCn1QSwECFAAKAAAAAAAkgpxXzxVB0ncCAAB3AgAACgAAAAAAAAAAAAAAAAAAAAAAbW9kZWwuanNvblBLBQYAAAAAAQABADgAAACfAgAAAAA="
+const sampleUrl = "https://pflow-dev.github.io/pflow-js/p/?z=GwkCAJwHto1sm0wlY/ApWO0mo82luvuMaSkLZQmYJtMGEenqmzosCqUAMnGuGyZH8UY2wGjCiAYdjeO/WUq3CVp01RVT12z9Uaj70Sex/h7bVHcHRtlqsExce2Q/wx/Uz/PughgHBfEfZE9Qbh+onTnQu1OuejznDb3bxGRqWy+aUcbhSth0mKWcNlSLjY6CjzXeYUZL9jOXttgdzSVthR/UOHhP0g642uaJ3IEiQYF7tEw/zyr2M0tz2oJwr+FAqjXmxylPh9Pyt6t6kjxzeyzr"
 
 func testModelDeclaration(m metamodel.Declaration) {
 	cell, fn := m.Cell, m.Fn
@@ -59,7 +61,8 @@ func TestModel_Define(t *testing.T) {
 
 func TestModel_GetState(t *testing.T) {
 	var mm = metamodel.New().Define(testModelDeclaration)
-	p := mm.Execute()
+
+	p := vasm.Execute(mm.Net())
 	s := p.GetState()
 	s[0] = 7 // try to alter state
 	s2 := p.GetState()
@@ -109,7 +112,7 @@ func TestModel_Execute(t *testing.T) {
 		if rebuild {
 			mm.Edit().Graph().Index()
 		}
-		p := mm.Execute()
+		p := vasm.Execute(mm.Net())
 		testCmd{Process: p, action: "quux", expectPass: true}.assertInhibited(t)
 		testCmd{Process: p, action: "bar", expectFail: true}.assertInhibited(t)
 		testCmd{Process: p, action: "plugh", expectFail: true}.assertInhibited(t)
@@ -142,39 +145,41 @@ func TestVectorFromBytes(t *testing.T) {
 
 func TestZipAndUnzipUrl(t *testing.T) {
 	mm := metamodel.New()
-	_, ok := mm.UnpackFromUrl(sampleUrl, "model.json")
+	src, ok := mm.UnpackFromUrl(sampleUrl)
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
+	t.Logf("source: %s", src)
 
-	urlOut, zipOk := mm.ZipUrl("https://pflow.dev/p/")
+	stageUrl := "https://pflow-dev.github.io/pflow-js/p/"
+	urlOut, zipOk := mm.ZipUrl(stageUrl)
 	if !zipOk {
 		t.Fatalf("failed to zip")
 	}
 
+	t.Logf("generated url: %s", urlOut)
 	m := metamodel.New()
-	_, unzipOk := m.UnpackFromUrl(urlOut, "model.json")
+	_, unzipOk := m.UnpackFromUrl(urlOut)
 	if !unzipOk {
 		t.Fatalf("failed to unzip")
 	}
-	t.Logf("generated url: %s", urlOut)
 }
 func TestUnzipUrl(t *testing.T) {
 	mm := metamodel.New()
-	data, ok := mm.UnpackFromUrl(sampleUrl, "model.json")
+	data, ok := mm.UnpackFromUrl(sampleUrl)
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
-	zdata, zok := metamodel.ToEncodedZip([]byte(data), "model.json")
+	zdata, zok := compression.CompressBrotliEncode([]byte(data))
 	if !zok {
 		t.Fatalf("failed to encode")
 	}
-	_, ok = mm.UnpackFromUrl("?z="+zdata, "model.json")
+	_, ok = mm.UnpackFromUrl("?z=" + zdata)
 	if !ok {
 		t.Fatalf("failed to unzip")
 	}
 
-	p := mm.Execute()
+	p := vasm.Execute(mm.Net())
 	testCmd{Process: p, action: "bar", expectPass: true}.assertInhibited(t)
 	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)
 	testCmd{call: p.Fire, action: "add", expectPass: true}.tx(t)
