@@ -1,8 +1,8 @@
 package zblob
 
 import (
-	"github.com/pflow-dev/go-metamodel/v2/metamodel"
-	"github.com/pflow-dev/go-metamodel/v2/oid"
+	"github.com/pflow-xyz/go-metamodel/metamodel"
+	"github.com/pflow-xyz/go-metamodel/oid"
 	"time"
 )
 

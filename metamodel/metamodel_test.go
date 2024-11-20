@@ -2,9 +2,9 @@ package metamodel_test
 
 import (
 	"encoding/json"
-	"github.com/pflow-dev/go-metamodel/v2/compression"
-	"github.com/pflow-dev/go-metamodel/v2/metamodel"
-	"github.com/pflow-dev/go-metamodel/v2/vasm"
+	"github.com/pflow-xyz/go-metamodel/compression"
+	"github.com/pflow-xyz/go-metamodel/metamodel"
+	"github.com/pflow-xyz/go-metamodel/vasm"
 	"testing"
 )
 

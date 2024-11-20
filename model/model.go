@@ -1,9 +1,9 @@
 package model
 
 import (
-	"github.com/pflow-dev/go-metamodel/v2/metamodel"
-	"github.com/pflow-dev/go-metamodel/v2/oid"
-	. "github.com/pflow-dev/go-metamodel/v2/zblob"
+	"github.com/pflow-xyz/go-metamodel/metamodel"
+	"github.com/pflow-xyz/go-metamodel/oid"
+	. "github.com/pflow-xyz/go-metamodel/zblob"
 )
 
 type Model struct {

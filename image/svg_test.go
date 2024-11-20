@@ -1,9 +1,9 @@
 package image_test
 
 import (
-	"github.com/pflow-dev/go-metamodel/v2/image"
-	"github.com/pflow-dev/go-metamodel/v2/model"
-	"github.com/pflow-dev/go-metamodel/v2/zblob"
+	"github.com/pflow-xyz/go-metamodel/image"
+	"github.com/pflow-xyz/go-metamodel/model"
+	"github.com/pflow-xyz/go-metamodel/zblob"
 	"testing"
 )
 

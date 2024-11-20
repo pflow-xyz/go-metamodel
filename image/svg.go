@@ -3,8 +3,8 @@ package image
 import (
 	"bufio"
 	"fmt"
-	"github.com/pflow-dev/go-metamodel/v2/metamodel"
-	"github.com/pflow-dev/go-metamodel/v2/vasm"
+	"github.com/pflow-xyz/go-metamodel/metamodel"
+	"github.com/pflow-xyz/go-metamodel/vasm"
 	"io"
 	"math"
 	"os"

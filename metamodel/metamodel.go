@@ -3,7 +3,7 @@ package metamodel
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pflow-dev/go-metamodel/v2/compression"
+	"github.com/pflow-xyz/go-metamodel/compression"
 )
 
 // Position defines location of a Place or Transition element

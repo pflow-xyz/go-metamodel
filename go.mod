@@ -1,4 +1,4 @@
-module github.com/pflow-dev/go-metamodel/v2
+module github.com/pflow-xyz/go-metamodel
 
 go 1.19
 

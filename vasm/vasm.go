@@ -1,6 +1,6 @@
 package vasm
 
-import . "github.com/pflow-dev/go-metamodel/v2/metamodel"
+import . "github.com/pflow-xyz/go-metamodel/metamodel"
 import "fmt"
 
 type StateMachine struct {
